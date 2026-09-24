@@ -86,6 +86,11 @@ h2 { font-family: var(--cond); font-weight: 600; font-size: 20px; margin: 0; tex
 .howto li::marker { font-family: var(--mono); color: var(--ink-2); }
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .howto .note { font-size: 13px; color: var(--ink-2); margin: 0; }
+.steps { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
+.steps summary { cursor: pointer; font-weight: 600; font-size: 14px; color: var(--accent); }
+.steps summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.steps[open] summary { margin-bottom: 8px; }
+.steps ol { font-size: 13.5px; }
 
 .results { display: grid; gap: 18px; }
 .file { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 14px; }
@@ -187,11 +192,24 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
     <aside class="howto" aria-labelledby="howto-t">
       <h2 id="howto-t">Cómo imprimir</h2>
       <ol>
-        <li>Tamaño de papel personalizado: <span class="mono">290 × 260 mm</span>.</li>
-        <li>Escala <b>100 %</b> o “Tamaño real”. Nunca “Ajustar a página”.</li>
+        <li>Si la impresora solo ofrece A4, oficio o A3, creá en Windows un tamaño de papel de <span class="mono">290 × 260 mm</span> (ver abajo).</li>
+        <li>Elegí ese tamaño y la bandeja manual.</li>
+        <li>Escala <b>100 %</b> o “Tamaño real”. Nunca “Ajustar a página”: eso achica o agranda todo.</li>
         <li>Doble faz: la página 1 va al frente y la 2 al dorso.</li>
         <li>Primero, una prueba en papel común a contraluz sobre la hoja del Colegio.</li>
       </ol>
+      <details class="steps">
+        <summary>Crear el tamaño 29 × 26 cm en Windows</summary>
+        <ol>
+          <li>Abrí <b>Inicio</b>, escribí <b>printui /s /t0</b> y apretá Enter. Se abre “Propiedades del servidor de impresión”.</li>
+          <li>Andá a la pestaña <b>Formularios</b> y marcá <b>Crear un nuevo formulario</b>.</li>
+          <li>Nombre: <b>Matricula 29x26</b>. Unidades: <b>Métrico</b>. Ancho <span class="mono">29,00 cm</span>, Alto <span class="mono">26,00 cm</span>. Márgenes en <span class="mono">0</span>.</li>
+          <li>Apretá <b>Guardar formulario</b> y después <b>Cerrar</b>.</li>
+          <li>Al imprimir, en <b>Propiedades</b> o <b>Preferencias</b> de la impresora, elegí el papel <b>Matricula 29x26</b>, la bandeja manual y la orientación <b>Horizontal</b>.</li>
+        </ol>
+        <p class="note">Algunas impresoras no aceptan un ancho mayor que el alto. En ese caso creá el formulario como 26 × 29 cm y elegí orientación Horizontal.</p>
+      </details>
+      <p class="note">¿Todavía no tenés el tamaño creado? Con el botón <b>Versión A3 a tamaño real</b> sale la matrícula sin escalar en una hoja A3, con el contorno y una regla de 10 cm para controlar que la medida sea exacta.</p>
       <p class="note">Si la vista previa muestra el cuadro gris debajo, es solo de referencia: no se imprime.</p>
     </aside>
   </section>
@@ -597,6 +615,42 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
     return { open };
   })();
 
+  // Arma una hoja A3 con la matrícula a tamaño real (sin escalar), marcas de corte y una regla de control.
+  async function makeA3(cleanBytes) {
+    const A3W = 297 / 25.4 * 72, A3H = 420 / 25.4 * 72, mm = 72 / 25.4;
+    const src = await PDFLib.PDFDocument.load(cleanBytes);
+    const doc = await PDFLib.PDFDocument.create();
+    const font = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+    const bold = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    const embedded = await doc.embedPages(src.getPages());
+    const gray = PDFLib.rgb(0.25, 0.25, 0.25);
+    embedded.forEach((ep, i) => {
+      const p = doc.addPage([A3W, A3H]);
+      const w = ep.width, h = ep.height;
+      const x = (A3W - w) / 2, y = (A3H - h) / 2;
+      p.drawPage(ep, { x, y, width: w, height: h });
+      const L = (x1, y1, x2, y2) => p.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 0.4, color: gray });
+      // contorno punteado de la hoja de 29 x 26 cm y marcas de corte por arriba y por abajo
+      p.drawRectangle({ x, y, width: w, height: h, borderColor: gray, borderWidth: 0.3, borderDashArray: [3, 3] });
+      const gap = 1.5 * mm, len = 10 * mm;
+      [x, x + w].forEach((cx) => {
+        L(cx, y - gap, cx, y - gap - len);
+        L(cx, y + h + gap, cx, y + h + gap + len);
+      });
+      const t = (s, tx, ty, f, size) => p.drawText(s, { x: tx, y: ty, size: size || 9, font: f || font, color: gray });
+      const lado = i === 0 ? 'FRENTE' : i === 1 ? 'DORSO' : 'PÁGINA ' + (i + 1);
+      const base = y - 26 * mm;
+      t(lado + ' - Matrícula a tamaño real sobre hoja A3', x, base + 12 * mm, bold, 10);
+      t('Imprimir en A3 al 100 % ("Tamaño real"). Recortando por las marcas, la hoja debe medir 29 x 26 cm.', x, base + 7 * mm);
+      // regla de 10 cm para verificar que la impresora no escaló
+      const rx = x, ry = base;
+      L(rx, ry, rx + 100 * mm, ry);
+      for (let k = 0; k <= 10; k++) L(rx + k * 10 * mm, ry, rx + k * 10 * mm, ry + (k % 5 === 0 ? 3 : 1.8) * mm);
+      t('Esta regla debe medir exactamente 10 cm', rx + 104 * mm, ry - 1, font, 8);
+    });
+    return doc.save();
+  }
+
   function outName(name) { return name.replace(/\.pdf$/i, '') + '_SIN_CUADRO.pdf'; }
 
   async function processFile(name, bytes, isDemo) {
@@ -634,11 +688,23 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
       const status = document.createElement('span'); status.className = 'saved';
       const outFile = outName(name);
       btn.addEventListener('click', () => saveFile(outFile, res.bytes, status));
+      const btnA3 = document.createElement('button'); btnA3.className = 'btn ghost'; btnA3.type = 'button';
+      btnA3.textContent = 'Versión A3 a tamaño real';
+      btnA3.title = 'La matrícula sin escalar, centrada en una hoja A3, con marcas de corte y una regla de 10 cm';
+      btnA3.addEventListener('click', async () => {
+        btnA3.disabled = true;
+        try {
+          const a3 = await makeA3(res.bytes.slice(0));
+          await saveFile(name.replace(/\.pdf$/i, '') + '_A3_TAMANO_REAL.pdf', a3, status);
+        } catch (e) {
+          console.error(e); status.textContent = 'No se pudo armar la versión A3.';
+        } finally { btnA3.disabled = false; }
+      });
       const lbl = document.createElement('label'); lbl.className = 'opt';
       const idUnder = 'under-' + Math.random().toString(36).slice(2, 8);
       lbl.htmlFor = idUnder;
       lbl.innerHTML = '<input type="checkbox" id="' + idUnder + '" checked><span>Ver el cuadro original debajo (solo en pantalla)</span>';
-      actions.append(btn, lbl, status);
+      actions.append(btn, btnA3, lbl, status);
       card.appendChild(actions);
 
       if (window.pdfjsLib) {
