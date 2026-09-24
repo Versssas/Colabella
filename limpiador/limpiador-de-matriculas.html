@@ -18,6 +18,14 @@
   --warn-soft: #F8EBD8;
   --paper: #FBF8EE;
   --paper-line: #B9B3A2;
+  --viewer-bg: #2A3038;
+  --viewer-bar: #1E232A;
+  --viewer-line: #3A424D;
+  --viewer-ink: #EEF1F4;
+  --viewer-ink-2: #AEB7C2;
+  --viewer-hover: #313944;
+  --viewer-accent: #8FB0E6;
+  --viewer-accent-ink: #0F1720;
   --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --cond: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -39,6 +47,7 @@
   --paper: #EDE9DC; --paper-line: #A29C8B;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
 .wrap { max-width: 1040px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 56px; display: grid; gap: 28px; }
 header { display: grid; gap: 6px; }
@@ -92,9 +101,54 @@ h2 { font-family: var(--cond); font-weight: 600; font-size: 20px; margin: 0; tex
 .page { display: grid; gap: 6px; }
 .page-label { font: 500 12px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
 .sheet { position: relative; background: var(--paper); border: 1px solid var(--paper-line); border-radius: 3px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+button.sheet { display: block; width: 100%; padding: 0; margin: 0; font: inherit; color: inherit; text-align: left; cursor: zoom-in; transition: box-shadow .15s, border-color .15s; }
+button.sheet:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(0,0,0,.14); }
+button.sheet:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .sheet canvas { display: block; width: 100%; height: auto; }
 .sheet canvas.under { position: absolute; inset: 0; opacity: .28; }
 .sheet canvas.under[hidden] { display: none !important; }
+.zoom-hint {
+  position: absolute; right: 8px; bottom: 8px; display: inline-flex; gap: 5px; align-items: center;
+  font: 600 12px/1 var(--sans); padding: 6px 9px; border-radius: 99px;
+  background: var(--accent); color: var(--accent-ink); box-shadow: 0 1px 4px rgba(0,0,0,.2);
+}
+
+html.no-scroll, html.no-scroll body { overflow: hidden; }
+.viewer {
+  position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column;
+  background: var(--viewer-bg); color: var(--viewer-ink);
+}
+.vbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; justify-content: space-between;
+  padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top, 0px));
+  background: var(--viewer-bar); border-bottom: 1px solid var(--viewer-line);
+}
+.vtitle { display: grid; gap: 2px; min-width: 0; }
+.vtitle strong { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vtitle span { font: 500 12px/1.2 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--viewer-ink-2); }
+.vtools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.vgroup { display: inline-flex; align-items: center; border: 1px solid var(--viewer-line); border-radius: 8px; overflow: hidden; }
+.vbtn {
+  font: 600 14px/1 var(--sans); min-width: 38px; height: 36px; padding: 0 10px; border: 0; cursor: pointer;
+  background: transparent; color: var(--viewer-ink); display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.vgroup .vbtn + .vbtn, .vgroup .vbtn + .vzoom, .vgroup .vzoom + .vbtn { border-left: 1px solid var(--viewer-line); }
+.vbtn:hover:not([disabled]) { background: var(--viewer-hover); }
+.vbtn:focus-visible { outline: 2px solid var(--viewer-accent); outline-offset: -2px; }
+.vbtn[disabled] { opacity: .35; cursor: default; }
+.vzoom { font: 500 13px/36px var(--mono); font-variant-numeric: tabular-nums; min-width: 62px; text-align: center; }
+.vclose { background: var(--viewer-accent); color: var(--viewer-accent-ink); border-radius: 8px; }
+.vclose:hover { background: var(--viewer-accent) !important; filter: brightness(1.08); }
+.vchk { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; padding: 0 6px; color: var(--viewer-ink-2); cursor: pointer; }
+.vchk input { width: 16px; height: 16px; accent-color: var(--viewer-accent); }
+.vstage { flex: 1; overflow: auto; display: flex; padding: 16px; cursor: grab; touch-action: pan-x pan-y pinch-zoom; }
+.vstage.dragging { cursor: grabbing; }
+.vsheet { position: relative; margin: auto; flex: none; background: var(--paper); box-shadow: 0 4px 30px rgba(0,0,0,.45); }
+.vsheet canvas { display: block; width: 100%; height: 100%; }
+.vsheet canvas.under { position: absolute; inset: 0; opacity: .28; }
+.vsheet canvas.under[hidden] { display: none !important; }
+.vhelp { padding: 8px 16px; padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); font-size: 12px; color: var(--viewer-ink-2); background: var(--viewer-bar); border-top: 1px solid var(--viewer-line); }
+@media (max-width: 560px) { .vhelp { display: none; } .vchk span { display: none; } }
 .msg { font-size: 14px; margin: 0; }
 .msg.err { color: var(--warn); }
 .saved { font-size: 13px; color: var(--ok); }
@@ -143,6 +197,30 @@ h2 { font-family: var(--cond); font-weight: 600; font-size: 20px; margin: 0; tex
   </section>
 
   <section class="results" id="results" aria-live="polite"></section>
+</div>
+
+<div class="viewer" id="viewer" role="dialog" aria-modal="true" aria-labelledby="vTitle" hidden>
+  <div class="vbar">
+    <div class="vtitle"><strong id="vTitle"></strong><span id="vPage"></span></div>
+    <div class="vtools">
+      <div class="vgroup">
+        <button class="vbtn" type="button" id="vPrev" aria-label="Página anterior">‹</button>
+        <button class="vbtn" type="button" id="vNext" aria-label="Página siguiente">›</button>
+      </div>
+      <div class="vgroup">
+        <button class="vbtn" type="button" id="vOut2" aria-label="Alejar">−</button>
+        <span class="vzoom" id="vZoom" aria-live="polite">100 %</span>
+        <button class="vbtn" type="button" id="vIn2" aria-label="Acercar">+</button>
+        <button class="vbtn" type="button" id="vFit">Ajustar</button>
+      </div>
+      <label class="vchk" for="vUnder"><input type="checkbox" id="vUnder" checked><span>Cuadro de referencia</span></label>
+      <button class="vbtn vclose" type="button" id="vClose">Cerrar ✕</button>
+    </div>
+  </div>
+  <div class="vstage" id="vStage">
+    <div class="vsheet" id="vSheet"><canvas id="vOut"></canvas><canvas id="vIn" class="under"></canvas></div>
+  </div>
+  <div class="vhelp">Doble clic para acercar o alejar · Ctrl + rueda del mouse para hacer zoom · Arrastrá para moverte · Flechas ← → para pasar de página · Esc para cerrar</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
@@ -396,16 +474,128 @@ h2 { font-family: var(--cond); font-weight: 600; font-size: 20px; margin: 0; tex
     statusEl.textContent = 'Descargado: ' + name;
   }
 
-  async function renderPage(pdf, n, canvas, transparent) {
+  async function renderPage(pdf, n, canvas, transparent, cssWidth) {
     const page = await pdf.getPage(n);
-    const w = Math.min(canvas.parentElement.clientWidth || 480, 720);
+    const w = cssWidth || Math.min(canvas.parentElement.clientWidth || 480, 720);
     const base = page.getViewport({ scale: 1 });
-    const scale = (w / base.width) * Math.min(window.devicePixelRatio || 1, 2);
+    let scale = (w / base.width) * Math.min(window.devicePixelRatio || 1, 2);
+    const maxPx = 5000; // límite de tamaño del canvas para no agotar la memoria
+    if (base.width * scale > maxPx) scale = maxPx / base.width;
     const vp = page.getViewport({ scale });
     canvas.width = Math.round(vp.width); canvas.height = Math.round(vp.height);
     const ctx = canvas.getContext('2d');
     await page.render({ canvasContext: ctx, viewport: vp, background: transparent ? 'rgba(0,0,0,0)' : 'rgb(255,255,255)', annotationMode: pdfjsLib.AnnotationMode.ENABLE }).promise;
   }
+
+  const ICON_ZOOM = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="m10.5 10.5 3.5 3.5M7 5v4M5 7h4" stroke-linecap="round"/></svg>';
+  function pageName(n, total) {
+    if (n === 1) return 'Frente · pág. 1';
+    if (n === 2) return 'Dorso · pág. 2';
+    return 'Pág. ' + n + ' de ' + total;
+  }
+
+  // Visor a pantalla completa con zoom
+  const viewer = (function () {
+    const el = $('#viewer'), stage = $('#vStage'), vsheet = $('#vSheet');
+    const cOut = $('#vOut'), cIn = $('#vIn'), title = $('#vTitle'), pageLbl = $('#vPage');
+    const zoomLbl = $('#vZoom'), underChk = $('#vUnder'), prev = $('#vPrev'), next = $('#vNext');
+    let cur = null, n = 1, zoom = 1, token = 0, lastFocus = null, pageW = 822, pageH = 737;
+    const MIN = 1, MAX = 5;
+
+    function fitWidth() {
+      const sw = stage.clientWidth - 32, sh = stage.clientHeight - 32;
+      return Math.max(200, Math.min(sw, sh * (pageW / pageH)));
+    }
+    async function render(keepCenter) {
+      if (!cur) return;
+      const my = ++token;
+      const page = await cur.pdfOut.getPage(n);
+      const vp = page.getViewport({ scale: 1 });
+      pageW = vp.width; pageH = vp.height;
+      const cssW = Math.round(fitWidth() * zoom), cssH = Math.round(cssW * pageH / pageW);
+      const cx = keepCenter ? (stage.scrollLeft + stage.clientWidth / 2) / (vsheet.offsetWidth || 1) : 0.5;
+      const cy = keepCenter ? (stage.scrollTop + stage.clientHeight / 2) / (vsheet.offsetHeight || 1) : 0.5;
+      vsheet.style.width = cssW + 'px'; vsheet.style.height = cssH + 'px';
+      stage.scrollLeft = cx * cssW - stage.clientWidth / 2;
+      stage.scrollTop = cy * cssH - stage.clientHeight / 2;
+      zoomLbl.textContent = Math.round(zoom * 100) + ' %';
+      title.textContent = cur.name;
+      pageLbl.textContent = pageName(n, cur.pdfOut.numPages);
+      prev.disabled = n <= 1; next.disabled = n >= cur.pdfOut.numPages;
+      const tmpOut = document.createElement('canvas'), tmpIn = document.createElement('canvas');
+      await renderPage(cur.pdfOut, n, tmpOut, true, cssW);
+      if (n <= cur.pdfIn.numPages) await renderPage(cur.pdfIn, n, tmpIn, false, cssW);
+      if (my !== token) return; // hubo otro pedido mientras dibujaba
+      [[cOut, tmpOut], [cIn, tmpIn]].forEach(([dst, src]) => {
+        dst.width = src.width || 1; dst.height = src.height || 1;
+        dst.getContext('2d').drawImage(src, 0, 0);
+      });
+    }
+    function setZoom(z) {
+      z = Math.min(MAX, Math.max(MIN, z));
+      if (Math.abs(z - zoom) < 0.001) return;
+      zoom = z; render(true);
+    }
+    function open(entry, page) {
+      cur = entry; n = page; zoom = 1;
+      underChk.checked = entry.underBox.checked; cIn.hidden = !underChk.checked;
+      lastFocus = document.activeElement;
+      el.hidden = false; document.documentElement.classList.add('no-scroll');
+      $('#vClose').focus();
+      render(false);
+    }
+    function close() {
+      el.hidden = true; document.documentElement.classList.remove('no-scroll'); cur = null; token++;
+      if (lastFocus) lastFocus.focus();
+    }
+    function go(d) {
+      if (!cur) return;
+      const t = n + d;
+      if (t < 1 || t > cur.pdfOut.numPages) return;
+      n = t; render(false);
+    }
+    $('#vClose').addEventListener('click', close);
+    $('#vIn2').addEventListener('click', () => setZoom(zoom * 1.25));
+    $('#vOut2').addEventListener('click', () => setZoom(zoom / 1.25));
+    $('#vFit').addEventListener('click', () => { zoom = 1; render(false); });
+    prev.addEventListener('click', () => go(-1));
+    next.addEventListener('click', () => go(1));
+    underChk.addEventListener('change', () => { cIn.hidden = !underChk.checked; });
+    vsheet.addEventListener('dblclick', () => setZoom(zoom > 1 ? 1 : 2.5));
+    stage.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault(); setZoom(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+    }, { passive: false });
+    // arrastrar con el mouse para moverse cuando está ampliado
+    let drag = null;
+    stage.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse' || e.button !== 0) return;
+      drag = { x: e.clientX, y: e.clientY, l: stage.scrollLeft, t: stage.scrollTop };
+      stage.classList.add('dragging');
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      stage.scrollLeft = drag.l - (e.clientX - drag.x); stage.scrollTop = drag.t - (e.clientY - drag.y);
+    });
+    window.addEventListener('pointerup', () => { drag = null; stage.classList.remove('dragging'); });
+    document.addEventListener('keydown', (e) => {
+      if (el.hidden) return;
+      if (e.key === 'Escape') { e.preventDefault(); close(); }
+      else if (e.key === 'ArrowLeft' && zoom === 1) go(-1);
+      else if (e.key === 'ArrowRight' && zoom === 1) go(1);
+      else if (e.key === '+' || e.key === '=') setZoom(zoom * 1.25);
+      else if (e.key === '-') setZoom(zoom / 1.25);
+      else if (e.key === 'Tab') { // mantener el foco dentro del visor
+        const f = Array.from(el.querySelectorAll('button:not([disabled]), input'));
+        const i = f.indexOf(document.activeElement);
+        if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); }
+        else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+      }
+    });
+    let rt = 0;
+    window.addEventListener('resize', () => { if (!cur) return; clearTimeout(rt); rt = setTimeout(() => render(true), 150); });
+    return { open };
+  })();
 
   function outName(name) { return name.replace(/\.pdf$/i, '') + '_SIN_CUADRO.pdf'; }
 
@@ -459,21 +649,27 @@ h2 { font-family: var(--cond); font-weight: 600; font-size: 20px; margin: 0; tex
           pdfjsLib.getDocument({ data: bytes.slice(0) }).promise,
         ]);
         const unders = [];
+        const underBox = lbl.querySelector('input');
+        const entry = { name, pdfOut, pdfIn, underBox };
         for (let n = 1; n <= pdfOut.numPages; n++) {
           const box = document.createElement('div'); box.className = 'page';
           const label = document.createElement('div'); label.className = 'page-label';
-          label.textContent = n === 1 ? 'Frente · pág. 1' : n === 2 ? 'Dorso · pág. 2' : 'Pág. ' + n;
-          const sheet = document.createElement('div'); sheet.className = 'sheet';
-          const cOut = document.createElement('canvas'); cOut.setAttribute('aria-label', 'Vista previa de la página ' + n + ' sin cuadro');
+          label.textContent = pageName(n, pdfOut.numPages);
+          const sheet = document.createElement('button'); sheet.type = 'button'; sheet.className = 'sheet';
+          sheet.setAttribute('aria-label', 'Ampliar ' + pageName(n, pdfOut.numPages).toLowerCase());
+          const cOut = document.createElement('canvas');
           const cIn = document.createElement('canvas'); cIn.className = 'under';
-          sheet.append(cOut, cIn);
+          const hint = document.createElement('span'); hint.className = 'zoom-hint'; hint.setAttribute('aria-hidden', 'true');
+          hint.innerHTML = ICON_ZOOM + 'Ampliar';
+          sheet.append(cOut, cIn, hint);
+          sheet.addEventListener('click', () => viewer.open(entry, n));
           box.append(label, sheet);
           pages.appendChild(box);
           unders.push(cIn);
           await renderPage(pdfOut, n, cOut, true);
           if (n <= pdfIn.numPages) await renderPage(pdfIn, n, cIn, false);
         }
-        lbl.querySelector('input').addEventListener('change', (e) => unders.forEach((c) => { c.hidden = !e.target.checked; }));
+        underBox.addEventListener('change', (e) => unders.forEach((c) => { c.hidden = !e.target.checked; }));
       }
     } catch (e) {
       console.error(e);
