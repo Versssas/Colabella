@@ -209,7 +209,18 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
         </ol>
         <p class="note">Algunas impresoras no aceptan un ancho mayor que el alto. En ese caso creá el formulario como 26 × 29 cm y elegí orientación Horizontal.</p>
       </details>
-      <p class="note">¿Todavía no tenés el tamaño creado? Con el botón <b>Versión A3 a tamaño real</b> sale la matrícula sin escalar en una hoja A3, con el contorno y una regla de 10 cm para controlar que la medida sea exacta.</p>
+      <details class="steps" open>
+        <summary>La impresora no ofrece 29 × 26: hoja portadora en A3</summary>
+        <ol>
+          <li>Descargá la <b>plantilla</b> e imprimila en una A3 común al <b>100 %</b>. Controlá que la regla mida 10 cm.</li>
+          <li>Pegá la hoja del Colegio dentro del rectángulo, con el encabezado hacia arriba. Usá cinta doble faz o adhesivo removible <b>por debajo</b> de la hoja.</li>
+          <li>Con el botón <b>Matrícula en A3</b> de cada archivo, bajá el PDF y imprimí solo la página 1, en <b>A3</b>, al <b>100 %</b>, por la <b>bandeja bypass</b>.</li>
+          <li>Para el dorso, despegá la hoja, dala vuelta, volvé a pegarla en el rectángulo e imprimí la página 2.</li>
+        </ol>
+        <button class="btn ghost" type="button" id="btnPlantilla">Descargar plantilla A3</button>
+        <span class="saved" id="plantillaStatus"></span>
+        <p class="note">Antes de usar una hoja buena, hacé todo con una hoja común cortada a 29 × 26 cm, para saber de qué lado imprime la bandeja bypass.</p>
+      </details>
       <p class="note">Si la vista previa muestra el cuadro gris debajo, es solo de referencia: no se imprime.</p>
     </aside>
   </section>
@@ -615,39 +626,61 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
     return { open };
   })();
 
-  // Arma una hoja A3 con la matrícula a tamaño real (sin escalar), marcas de corte y una regla de control.
+  // Hoja portadora: la matrícula se imprime en A3, sin escalar y centrada, sobre una hoja A3 común
+  // a la que antes se le pegó la hoja del Colegio justo encima del contorno de la plantilla.
+  const A3W = 297 / 25.4 * 72, A3H = 420 / 25.4 * 72, MM = 72 / 25.4;
+  const SHEET_PT_W = 822.12, SHEET_PT_H = 737.16;
+
   async function makeA3(cleanBytes) {
-    const A3W = 297 / 25.4 * 72, A3H = 420 / 25.4 * 72, mm = 72 / 25.4;
     const src = await PDFLib.PDFDocument.load(cleanBytes);
+    const doc = await PDFLib.PDFDocument.create();
+    const embedded = await doc.embedPages(src.getPages());
+    embedded.forEach((ep) => {
+      const p = doc.addPage([A3W, A3H]);
+      p.drawPage(ep, { x: (A3W - ep.width) / 2, y: (A3H - ep.height) / 2, width: ep.width, height: ep.height });
+    });
+    return doc.save();
+  }
+
+  async function makePlantilla() {
     const doc = await PDFLib.PDFDocument.create();
     const font = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
     const bold = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
-    const embedded = await doc.embedPages(src.getPages());
-    const gray = PDFLib.rgb(0.25, 0.25, 0.25);
-    embedded.forEach((ep, i) => {
-      const p = doc.addPage([A3W, A3H]);
-      const w = ep.width, h = ep.height;
-      const x = (A3W - w) / 2, y = (A3H - h) / 2;
-      p.drawPage(ep, { x, y, width: w, height: h });
-      const L = (x1, y1, x2, y2) => p.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: 0.4, color: gray });
-      // contorno punteado de la hoja de 29 x 26 cm y marcas de corte por arriba y por abajo
-      p.drawRectangle({ x, y, width: w, height: h, borderColor: gray, borderWidth: 0.3, borderDashArray: [3, 3] });
-      const gap = 1.5 * mm, len = 10 * mm;
-      [x, x + w].forEach((cx) => {
-        L(cx, y - gap, cx, y - gap - len);
-        L(cx, y + h + gap, cx, y + h + gap + len);
-      });
-      const t = (s, tx, ty, f, size) => p.drawText(s, { x: tx, y: ty, size: size || 9, font: f || font, color: gray });
-      const lado = i === 0 ? 'FRENTE' : i === 1 ? 'DORSO' : 'PÁGINA ' + (i + 1);
-      const base = y - 26 * mm;
-      t(lado + ' - Matrícula a tamaño real sobre hoja A3', x, base + 12 * mm, bold, 10);
-      t('Imprimir en A3 al 100 % ("Tamaño real"). Recortando por las marcas, la hoja debe medir 29 x 26 cm.', x, base + 7 * mm);
-      // regla de 10 cm para verificar que la impresora no escaló
-      const rx = x, ry = base;
-      L(rx, ry, rx + 100 * mm, ry);
-      for (let k = 0; k <= 10; k++) L(rx + k * 10 * mm, ry, rx + k * 10 * mm, ry + (k % 5 === 0 ? 3 : 1.8) * mm);
-      t('Esta regla debe medir exactamente 10 cm', rx + 104 * mm, ry - 1, font, 8);
+    const ink = PDFLib.rgb(0.1, 0.1, 0.1), gray = PDFLib.rgb(0.35, 0.35, 0.35);
+    const p = doc.addPage([A3W, A3H]);
+    const w = SHEET_PT_W, h = SHEET_PT_H, x = (A3W - w) / 2, y = (A3H - h) / 2;
+    const L = (x1, y1, x2, y2, t, c) => p.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: t || 0.5, color: c || ink });
+    const T = (s, tx, ty, f, size, c) => p.drawText(s, { x: tx, y: ty, size: size || 10, font: f || font, color: c || ink });
+    const C = (s, ty, f, size) => { const tw = (f || font).widthOfTextAtSize(s, size || 10); T(s, (A3W - tw) / 2, ty, f, size); };
+    // contorno de la hoja y esquinas marcadas
+    p.drawRectangle({ x, y, width: w, height: h, borderColor: ink, borderWidth: 0.6 });
+    const k = 12 * MM;
+    [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]].forEach(([cx, cy, sx, sy]) => {
+      L(cx, cy, cx + sx * k, cy, 2); L(cx, cy, cx, cy + sy * k, 2);
     });
+    // marcas que siguen el borde hacia afuera, arriba y abajo
+    [x, x + w].forEach((cx) => { L(cx, y - 2 * MM, cx, y - 14 * MM); L(cx, y + h + 2 * MM, cx, y + h + 14 * MM); });
+    // indicaciones
+    const top = y + h + 22 * MM;
+    C('BORDE DE ARRIBA DEL FORMULARIO', top, bold, 13);
+    L(A3W / 2, top + 6 * MM, A3W / 2, top + 16 * MM, 1.5);
+    L(A3W / 2 - 4 * MM, top + 12 * MM, A3W / 2, top + 16 * MM, 1.5); L(A3W / 2 + 4 * MM, top + 12 * MM, A3W / 2, top + 16 * MM, 1.5);
+    const ins = [
+      'PLANTILLA PARA HOJA PORTADORA  -  Hoja de matrícula 29 x 26 cm sobre A3',
+      '1. Imprimí esta plantilla en una hoja A3 común, al 100 % ("Tamaño real").',
+      '2. Controlá que la regla de abajo mida exactamente 10 cm.',
+      '3. Pegá la hoja del Colegio dentro del rectángulo, con su encabezado hacia arriba,',
+      '    usando cinta doble faz o adhesivo removible POR DEBAJO de la hoja (nada a la vista).',
+      '4. Poné la A3 en la bandeja bypass e imprimí la "Matrícula en A3" al 100 %, en A3.',
+      '5. Para el dorso, despegá la hoja, dala vuelta, volvé a pegarla y repetí con la página 2.',
+    ];
+    let ty = y - 24 * MM;
+    ins.forEach((s, i) => { T(s, x + 4 * MM, ty, i === 0 ? bold : font, i === 0 ? 11 : 10); ty -= (i === 0 ? 7 : 5.5) * MM; });
+    const rx = x + 4 * MM, ry = ty - 4 * MM;
+    L(rx, ry, rx + 100 * MM, ry, 0.8);
+    for (let i = 0; i <= 10; i++) L(rx + i * 10 * MM, ry, rx + i * 10 * MM, ry + (i % 5 === 0 ? 4 : 2.5) * MM, 0.8);
+    T('0', rx - 1.2 * MM, ry - 4.5 * MM, font, 8, gray); T('10 cm', rx + 96 * MM, ry - 4.5 * MM, font, 8, gray);
+    T('Rectángulo: 29 x 26 cm', x + w - 45 * MM, y + 4 * MM, font, 9, gray);
     return doc.save();
   }
 
@@ -689,13 +722,13 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
       const outFile = outName(name);
       btn.addEventListener('click', () => saveFile(outFile, res.bytes, status));
       const btnA3 = document.createElement('button'); btnA3.className = 'btn ghost'; btnA3.type = 'button';
-      btnA3.textContent = 'Versión A3 a tamaño real';
-      btnA3.title = 'La matrícula sin escalar, centrada en una hoja A3, con marcas de corte y una regla de 10 cm';
+      btnA3.textContent = 'Matrícula en A3 (hoja portadora)';
+      btnA3.title = 'La matrícula sin escalar y centrada en A3, para imprimir sobre la hoja del Colegio pegada a una A3';
       btnA3.addEventListener('click', async () => {
         btnA3.disabled = true;
         try {
           const a3 = await makeA3(res.bytes.slice(0));
-          await saveFile(name.replace(/\.pdf$/i, '') + '_A3_TAMANO_REAL.pdf', a3, status);
+          await saveFile(name.replace(/\.pdf$/i, '') + '_A3_HOJA_PORTADORA.pdf', a3, status);
         } catch (e) {
           console.error(e); status.textContent = 'No se pudo armar la versión A3.';
         } finally { btnA3.disabled = false; }
@@ -752,6 +785,13 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
     files.reverse().forEach((f) => f.arrayBuffer().then((buf) => processFile(f.name, new Uint8Array(buf), false)));
   }
 
+  $('#btnPlantilla').addEventListener('click', async (e) => {
+    const b = e.currentTarget, st = $('#plantillaStatus');
+    b.disabled = true;
+    try { await saveFile('PLANTILLA_A3_hoja_portadora_29x26.pdf', await makePlantilla(), st); }
+    catch (err) { console.error(err); st.textContent = 'No se pudo armar la plantilla.'; }
+    finally { b.disabled = false; }
+  });
   drop.addEventListener('click', () => input.click());
   drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
   input.addEventListener('change', () => { handleFiles(input.files); input.value = ''; });
