@@ -273,6 +273,37 @@ h2 { font-family: var(--cond); font-weight: 600; font-size: 20px; margin: 0; tex
         stats.formularios++;
       };
 
+      stats.campos = 0;
+      let flatCount = 0;
+      const numOf = (o) => (o && typeof o.asNumber === 'function' ? o.asNumber() : 0);
+      const fmt = (x) => (Math.round(x * 10000) / 10000).toString();
+      const numArr = (arr, def) => {
+        if (!(arr instanceof PDFArray)) return def;
+        const v = arr.asArray().map((o) => numOf(ctx.lookup(o)));
+        return v.length === def.length ? v : def;
+      };
+      // Matriz que ubica la apariencia del campo dentro de su rectángulo (PDF 1.7, 12.5.5).
+      const placeForm = (form, rectObj) => {
+        const r = numArr(rectObj, [0, 0, 0, 0]);
+        const rx0 = Math.min(r[0], r[2]), ry0 = Math.min(r[1], r[3]), rx1 = Math.max(r[0], r[2]), ry1 = Math.max(r[1], r[3]);
+        const b = numArr(form.dict.lookup(N('BBox')), [0, 0, 0, 0]);
+        const m = numArr(form.dict.lookup(N('Matrix')), [1, 0, 0, 1, 0, 0]);
+        const pts = [[b[0], b[1]], [b[2], b[1]], [b[0], b[3]], [b[2], b[3]]]
+          .map(([x, y]) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]);
+        const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
+        const bx0 = Math.min(...xs), by0 = Math.min(...ys), bx1 = Math.max(...xs), by1 = Math.max(...ys);
+        if (bx1 - bx0 <= 0 || by1 - by0 <= 0 || rx1 - rx0 <= 0 || ry1 - ry0 <= 0) return null;
+        const sx = (rx1 - rx0) / (bx1 - bx0), sy = (ry1 - ry0) / (by1 - by0);
+        return [sx, 0, 0, sy, rx0 - bx0 * sx, ry0 - by0 * sy];
+      };
+      const pageXObjects = (node) => {
+        let res = node.Resources();
+        if (!(res instanceof PDFDict)) { res = ctx.obj({}); node.set(N('Resources'), res); }
+        let xo = res.lookup(N('XObject'));
+        if (!(xo instanceof PDFDict)) { xo = ctx.obj({}); res.set(N('XObject'), xo); }
+        return xo;
+      };
+
       for (const page of doc.getPages()) {
         const node = page.node;
         processResources(node.Resources());
@@ -281,26 +312,42 @@ h2 { font-family: var(--cond); font-weight: 600; font-size: 20px; margin: 0; tex
         const contents = cRaw && ctx.lookup(cRaw) instanceof PDFArray ? ctx.lookup(cRaw) : cRaw;
         const refs = contents instanceof PDFArray ? contents.asArray() : contents ? [contents] : [];
         const joined = refs.map((r) => { const s = ctx.lookup(r); return s instanceof PDFStream ? streamText(s) : ''; }).join('\n');
-        const newRef = ctx.register(ctx.stream(filterContent(joined, removeText)));
-        node.set(N('Contents'), newRef);
-        // campos de formulario todavía editables: se limpia su apariencia (bordes, flechas, fondos)
-        const annots = node.Annots();
-        if (annots) {
+        let pageOps = 'q\n' + filterContent(joined, removeText) + '\nQ\n';
+        // Campos de formulario todavía editables: se limpia su apariencia (bordes, flechas, fondos)
+        // y se "aplanan" como texto fijo, para que cualquier programa los imprima igual.
+        const annotsRaw = node.get(N('Annots'));
+        const annots = annotsRaw && ctx.lookup(annotsRaw);
+        if (annots instanceof PDFArray) {
+          const keep = [];
           for (let k = 0; k < annots.size(); k++) {
-            const a = annots.lookup(k);
-            if (!(a instanceof PDFDict)) continue;
-            a.delete(N('MK'));
+            const aRef = annots.get(k);
+            const a = ctx.lookup(aRef);
+            if (!(a instanceof PDFDict) || a.get(N('Subtype')) !== N('Widget')) { keep.push(aRef); continue; }
+            stats.campos++;
+            const flags = numOf(a.lookup(N('F')));
+            if ((flags & 2) || !(flags & 4)) continue; // oculto o no imprimible
             const ap = a.lookup(N('AP'));
-            if (!(ap instanceof PDFDict)) continue;
-            const nAp = ap.get(N('N'));
-            const nObj = nAp && ctx.lookup(nAp);
-            if (nObj instanceof PDFStream) processForm(nAp, false);
-            else if (nObj instanceof PDFDict) for (const [, v] of nObj.entries()) processForm(v, false);
+            if (!(ap instanceof PDFDict)) continue; // campo vacío
+            let nRef = ap.get(N('N'));
+            let nObj = nRef && ctx.lookup(nRef);
+            if (nObj instanceof PDFDict) {
+              const as = a.get(N('AS'));
+              nRef = as ? nObj.get(as) : undefined;
+              nObj = nRef && ctx.lookup(nRef);
+            }
+            if (!(nObj instanceof PDFStream)) continue;
+            processForm(nRef, false);
+            const cm = placeForm(nObj, a.lookup(N('Rect')));
+            if (!cm) continue;
+            const name = 'FlatW' + (flatCount++);
+            pageXObjects(node).set(N(name), nRef);
+            pageOps += 'q\n' + cm.map(fmt).join(' ') + ' cm\n/' + name + ' Do\nQ\n';
           }
+          if (keep.length) node.set(N('Annots'), ctx.obj(keep)); else node.delete(N('Annots'));
         }
+        node.set(N('Contents'), ctx.register(ctx.stream(pageOps)));
       }
-      const acro = doc.catalog.lookup(N('AcroForm'));
-      if (acro instanceof PDFDict) acro.delete(N('NeedAppearances'));
+      doc.catalog.delete(N('AcroForm'));
 
       return doc.save({ useObjectStreams: false }).then((out) => ({
         bytes: out,
@@ -357,7 +404,7 @@ h2 { font-family: var(--cond); font-weight: 600; font-size: 20px; margin: 0; tex
     const vp = page.getViewport({ scale });
     canvas.width = Math.round(vp.width); canvas.height = Math.round(vp.height);
     const ctx = canvas.getContext('2d');
-    await page.render({ canvasContext: ctx, viewport: vp, background: transparent ? 'rgba(0,0,0,0)' : 'rgb(255,255,255)', annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }).promise;
+    await page.render({ canvasContext: ctx, viewport: vp, background: transparent ? 'rgba(0,0,0,0)' : 'rgb(255,255,255)', annotationMode: pdfjsLib.AnnotationMode.ENABLE }).promise;
   }
 
   function outName(name) { return name.replace(/\.pdf$/i, '') + '_SIN_CUADRO.pdf'; }
