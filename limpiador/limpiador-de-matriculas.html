@@ -1,0 +1,492 @@
+<title>Limpiador de matrículas</title>
+<meta name="description" content="Saca el cuadro de fondo de los PDF de matrícula para imprimir solo el texto sobre la hoja del Colegio de Escribanos.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root {
+  --bg: #F3F5F2;
+  --surface: #FFFFFF;
+  --ink: #1B2430;
+  --ink-2: #4A5563;
+  --line: #D3D9D2;
+  --accent: #2A4F86;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E3EAF5;
+  --ok: #2E6A45;
+  --ok-soft: #E1F0E6;
+  --warn: #93570F;
+  --warn-soft: #F8EBD8;
+  --paper: #FBF8EE;
+  --paper-line: #B9B3A2;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --cond: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #12161B; --surface: #1A2027; --ink: #E6EAEE; --ink-2: #A3ADB8; --line: #2E3742;
+    --accent: #8FB0E6; --accent-ink: #0F1720; --accent-soft: #1F2B3D;
+    --ok: #7CC99A; --ok-soft: #1B2E23; --warn: #E3AE64; --warn-soft: #33271A;
+    --paper: #EDE9DC; --paper-line: #A29C8B;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #12161B; --surface: #1A2027; --ink: #E6EAEE; --ink-2: #A3ADB8; --line: #2E3742;
+  --accent: #8FB0E6; --accent-ink: #0F1720; --accent-soft: #1F2B3D;
+  --ok: #7CC99A; --ok-soft: #1B2E23; --warn: #E3AE64; --warn-soft: #33271A;
+  --paper: #EDE9DC; --paper-line: #A29C8B;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1040px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 56px; display: grid; gap: 28px; }
+header { display: grid; gap: 6px; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-2); }
+h1 { font-family: var(--cond); font-weight: 600; font-size: clamp(28px, 5vw, 40px); line-height: 1.1; margin: 0; text-wrap: balance; }
+.lead { margin: 0; max-width: 62ch; color: var(--ink-2); }
+h2 { font-family: var(--cond); font-weight: 600; font-size: 20px; margin: 0; text-wrap: balance; }
+
+.top { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 760px) { .top { grid-template-columns: 1fr; } }
+
+.drop {
+  border: 2px dashed var(--accent); border-radius: 10px; background: var(--accent-soft);
+  padding: 28px 20px; display: grid; gap: 12px; justify-items: center; text-align: center; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.drop:hover, .drop.over { background: var(--surface); }
+.drop:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.drop svg { width: 44px; height: 44px; }
+.drop strong { font-size: 18px; font-family: var(--cond); font-weight: 600; }
+.drop span { color: var(--ink-2); font-size: 14px; }
+.btn {
+  font: 600 15px/1 var(--sans); border-radius: 8px; padding: 11px 16px; cursor: pointer; border: 1px solid var(--accent);
+  background: var(--accent); color: var(--accent-ink); display: inline-flex; gap: 8px; align-items: center;
+}
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn[disabled] { opacity: .5; cursor: default; }
+.opt { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--ink-2); }
+.opt input { margin-top: 3px; width: 17px; height: 17px; accent-color: var(--accent); flex: none; }
+.opt b { color: var(--ink); font-weight: 600; }
+.left { display: grid; gap: 14px; }
+
+.howto { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 16px; display: grid; gap: 10px; }
+.howto ol { margin: 0; padding-left: 20px; display: grid; gap: 8px; font-size: 14px; }
+.howto li::marker { font-family: var(--mono); color: var(--ink-2); }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.howto .note { font-size: 13px; color: var(--ink-2); margin: 0; }
+
+.results { display: grid; gap: 18px; }
+.file { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 14px; }
+.file-head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.file-name { font-weight: 600; overflow-wrap: anywhere; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 12px/1 var(--mono); padding: 5px 8px; border-radius: 99px; background: var(--bg); color: var(--ink-2); border: 1px solid var(--line); white-space: nowrap; }
+.chip.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.chip.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.chip.demo { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pages { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; }
+.page { display: grid; gap: 6px; }
+.page-label { font: 500 12px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.sheet { position: relative; background: var(--paper); border: 1px solid var(--paper-line); border-radius: 3px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.sheet canvas { display: block; width: 100%; height: auto; }
+.sheet canvas.under { position: absolute; inset: 0; opacity: .28; }
+.sheet canvas.under[hidden] { display: none !important; }
+.msg { font-size: 14px; margin: 0; }
+.msg.err { color: var(--warn); }
+.saved { font-size: 13px; color: var(--ok); }
+.privacy { font-size: 13px; color: var(--ink-2); display: flex; gap: 8px; align-items: flex-start; margin: 0; }
+.privacy svg { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Escribanía · Hoja de matrícula 29 × 26 cm</div>
+    <h1>Limpiador de matrículas</h1>
+    <p class="lead">Arrastrá el PDF que genera el sistema. La página le saca el cuadro de fondo y deja solo el texto, en el mismo lugar, para imprimirlo sobre la hoja del Colegio de Escribanos.</p>
+  </header>
+
+  <section class="top">
+    <div class="left">
+      <div class="drop" id="drop" tabindex="0" role="button" aria-label="Elegir PDF de matrícula">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="color:var(--accent)">
+          <path d="M12 6h17l9 9v27H12z" fill="var(--surface)"/><path d="M29 6v9h9" /><path d="M25 34V21m-5 5 5-5 5 5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <strong>Soltá acá el PDF de la matrícula</strong>
+        <span>o hacé clic para buscarlo. Podés poner varios a la vez.</span>
+        <input type="file" id="file" accept="application/pdf,.pdf" multiple hidden>
+      </div>
+      <label class="opt" for="optRotulos">
+        <input type="checkbox" id="optRotulos" checked>
+        <span><b>Quitar también los rótulos fijos del formulario</b>, como “ANTECEDENTE DOMINIAL:”, que ya vienen impresos en la hoja. Desmarcalo si en la vista previa desaparece algún dato.</span>
+      </label>
+      <p class="privacy">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
+        Los archivos se procesan en esta computadora. No se suben a ningún lado.
+      </p>
+    </div>
+
+    <aside class="howto" aria-labelledby="howto-t">
+      <h2 id="howto-t">Cómo imprimir</h2>
+      <ol>
+        <li>Tamaño de papel personalizado: <span class="mono">290 × 260 mm</span>.</li>
+        <li>Escala <b>100 %</b> o “Tamaño real”. Nunca “Ajustar a página”.</li>
+        <li>Doble faz: la página 1 va al frente y la 2 al dorso.</li>
+        <li>Primero, una prueba en papel común a contraluz sobre la hoja del Colegio.</li>
+      </ol>
+      <p class="note">Si la vista previa muestra el cuadro gris debajo, es solo de referencia: no se imprime.</p>
+    </aside>
+  </section>
+
+  <section class="results" id="results" aria-live="polite"></section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script>
+// Quita el "cuadro" (imágenes y líneas del formulario) de un PDF y deja solo el texto,
+// para imprimir sobre la hoja preimpresa. Funciona en el navegador y en node.
+(function (root) {
+  const WS = '\x00\t\n\f\r ';
+  const DELIM = '()<>[]{}/%';
+  const PATH_OPS = new Set(['m', 'l', 'c', 'v', 'y', 'h', 're']);
+  const PAINT_OPS = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n']);
+
+  // Divide un content stream en operaciones: { op, start, end } (start incluye los operandos).
+  function tokenize(src) {
+    const ops = [];
+    let i = 0, opStart = -1;
+    const n = src.length;
+    while (i < n) {
+      const ch = src[i];
+      if (WS.includes(ch)) { i++; continue; }
+      if (ch === '%') { while (i < n && src[i] !== '\n' && src[i] !== '\r') i++; continue; }
+      const tokStart = i;
+      if (ch === '(') {
+        let depth = 1; i++;
+        while (i < n && depth > 0) {
+          if (src[i] === '\\') i += 2;
+          else { if (src[i] === '(') depth++; else if (src[i] === ')') depth--; i++; }
+        }
+      } else if (ch === '<' && src[i + 1] === '<') { i += 2; }
+      else if (ch === '>' && src[i + 1] === '>') { i += 2; }
+      else if (ch === '<') { while (i < n && src[i] !== '>') i++; i++; }
+      else if (ch === '[' || ch === ']' || ch === '{' || ch === '}') { i++; }
+      else if (ch === '/') { i++; while (i < n && !WS.includes(src[i]) && !DELIM.includes(src[i])) i++; }
+      else {
+        while (i < n && !WS.includes(src[i]) && !DELIM.includes(src[i])) i++;
+        if (i === tokStart) { i++; continue; } // caracter suelto inesperado
+        const word = src.slice(tokStart, i);
+        const isOperand = /^[+-]?(\d+\.?\d*|\.\d+)$/.test(word) || word === 'true' || word === 'false' || word === 'null';
+        if (!isOperand) {
+          const start = opStart === -1 ? tokStart : opStart;
+          if (word === 'ID') {
+            // datos binarios de imagen en línea hasta EI
+            const m = /\sEI(?=[\s]|$)/g; m.lastIndex = i + 1;
+            const r = m.exec(src);
+            i = r ? r.index + r[0].length : n;
+          }
+          ops.push({ op: word, start, end: i });
+          opStart = -1;
+          continue;
+        }
+      }
+      if (opStart === -1) opStart = tokStart;
+    }
+    return ops;
+  }
+
+  // Filtra un content stream: saca trazos/rellenos, sombreados e imágenes en línea;
+  // conserva los recortes (clip). Si removeText, también saca los bloques BT..ET.
+  function filterContent(src, removeText) {
+    const ops = tokenize(src);
+    const out = [];
+    let path = [], clip = false, inText = false, inInline = false;
+    for (const o of ops) {
+      const raw = src.slice(o.start, o.end);
+      if (inInline) { if (o.op === 'ID') inInline = false; continue; }
+      if (o.op === 'BI') { inInline = true; continue; }
+      if (removeText && o.op === 'BT') { inText = true; continue; }
+      if (inText) { if (o.op === 'ET') inText = false; continue; }
+      if (PATH_OPS.has(o.op)) { path.push(raw); continue; }
+      if (o.op === 'W' || o.op === 'W*') { path.push(o.op); clip = true; continue; }
+      if (PAINT_OPS.has(o.op)) {
+        if (clip) out.push(path.join('\n') + '\nn');
+        path = []; clip = false; continue;
+      }
+      if (o.op === 'sh') continue;
+      out.push(raw);
+    }
+    return out.join('\n');
+  }
+
+  function limpiar(PDFLib, bytes, opts) {
+    const { PDFDocument, PDFName, PDFDict, PDFArray, PDFRawStream, PDFStream, decodePDFRawStream } = PDFLib;
+    const removeText = !opts || opts.quitarTextosFijos !== false;
+    return PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false }).then((doc) => {
+      const ctx = doc.context;
+      const stats = { imagenes: 0, formularios: 0 };
+      const emptyForm = ctx.register(ctx.stream('', { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 1, 1] }));
+      const visited = new Set();
+      const N = (s) => PDFName.of(s);
+
+      const streamText = (stream) => {
+        const data = stream instanceof PDFRawStream ? decodePDFRawStream(stream).decode() : stream.getContents();
+        let s = '';
+        for (let k = 0; k < data.length; k += 0x8000) s += String.fromCharCode.apply(null, data.subarray(k, k + 0x8000));
+        return s;
+      };
+      const toBytes = (s) => { const b = new Uint8Array(s.length); for (let k = 0; k < s.length; k++) b[k] = s.charCodeAt(k) & 0xff; return b; };
+      const rewriteStream = (ref, stream, text) => {
+        const dict = stream.dict.clone(ctx);
+        dict.delete(N('Filter')); dict.delete(N('DecodeParms')); dict.delete(N('Length'));
+        ctx.assign(ref, PDFRawStream.of(dict, toBytes(text)));
+      };
+
+      // Recorre recursos: reemplaza imágenes por un formulario vacío y limpia los formularios anidados.
+      const processResources = (resources) => {
+        const res = resources && ctx.lookup(resources);
+        if (!(res instanceof PDFDict)) return;
+        const xobjs = res.lookup(N('XObject'));
+        if (!(xobjs instanceof PDFDict)) return;
+        for (const [name, val] of xobjs.entries()) {
+          const obj = ctx.lookup(val);
+          if (!(obj instanceof PDFStream)) continue;
+          const sub = obj.dict.get(N('Subtype'));
+          if (sub === N('Image')) { xobjs.set(name, emptyForm); stats.imagenes++; }
+          else if (sub === N('Form')) processForm(val, false);
+        }
+      };
+      const processForm = (ref, dropText) => {
+        const key = ref.toString();
+        if (visited.has(key)) return;
+        visited.add(key);
+        const stream = ctx.lookup(ref);
+        if (!(stream instanceof PDFStream)) return;
+        processResources(stream.dict.get(N('Resources')));
+        rewriteStream(ref, stream, filterContent(streamText(stream), dropText));
+        stats.formularios++;
+      };
+
+      for (const page of doc.getPages()) {
+        const node = page.node;
+        processResources(node.Resources());
+        // contenido propio de la página (acá están los rótulos fijos de la plantilla)
+        const cRaw = node.get(N('Contents'));
+        const contents = cRaw && ctx.lookup(cRaw) instanceof PDFArray ? ctx.lookup(cRaw) : cRaw;
+        const refs = contents instanceof PDFArray ? contents.asArray() : contents ? [contents] : [];
+        const joined = refs.map((r) => { const s = ctx.lookup(r); return s instanceof PDFStream ? streamText(s) : ''; }).join('\n');
+        const newRef = ctx.register(ctx.stream(filterContent(joined, removeText)));
+        node.set(N('Contents'), newRef);
+        // campos de formulario todavía editables: se limpia su apariencia (bordes, flechas, fondos)
+        const annots = node.Annots();
+        if (annots) {
+          for (let k = 0; k < annots.size(); k++) {
+            const a = annots.lookup(k);
+            if (!(a instanceof PDFDict)) continue;
+            a.delete(N('MK'));
+            const ap = a.lookup(N('AP'));
+            if (!(ap instanceof PDFDict)) continue;
+            const nAp = ap.get(N('N'));
+            const nObj = nAp && ctx.lookup(nAp);
+            if (nObj instanceof PDFStream) processForm(nAp, false);
+            else if (nObj instanceof PDFDict) for (const [, v] of nObj.entries()) processForm(v, false);
+          }
+        }
+      }
+      const acro = doc.catalog.lookup(N('AcroForm'));
+      if (acro instanceof PDFDict) acro.delete(N('NeedAppearances'));
+
+      return doc.save({ useObjectStreams: false }).then((out) => ({
+        bytes: out,
+        stats,
+        paginas: doc.getPages().map((p) => p.getSize()),
+      }));
+    });
+  }
+
+  const api = { limpiar, filterContent, tokenize };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  else root.LimpiarCuadro = api;
+})(typeof self !== 'undefined' ? self : this);
+
+</script>
+<script>
+(function () {
+  const $ = (s) => document.querySelector(s);
+  const drop = $('#drop'), input = $('#file'), results = $('#results'), optRot = $('#optRotulos');
+  const SHEET_W = 290, SHEET_H = 260; // mm
+  const toMm = (pt) => pt / 72 * 25.4;
+  const fmtCm = (mm) => (mm / 10).toFixed(1).replace('.', ',');
+  if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  let downloadsP = null;
+  function getDownloads() {
+    if (!downloadsP) downloadsP = (window.claude && typeof window.claude.use === 'function') ? window.claude.use('downloads').catch(() => null) : Promise.resolve(null);
+    return downloadsP;
+  }
+
+  async function saveFile(name, bytes, statusEl) {
+    const dl = await getDownloads();
+    if (dl) {
+      try {
+        await dl.save({ filename: name, data: new Blob([bytes], { type: 'application/pdf' }) });
+        statusEl.textContent = 'Guardado: ' + name;
+      } catch (e) {
+        statusEl.textContent = e && e.code === 'declined' ? 'No se guardó el archivo.' : 'No se pudo guardar el archivo en esta vista.';
+      }
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    statusEl.textContent = 'Descargado: ' + name;
+  }
+
+  async function renderPage(pdf, n, canvas, transparent) {
+    const page = await pdf.getPage(n);
+    const w = Math.min(canvas.parentElement.clientWidth || 480, 720);
+    const base = page.getViewport({ scale: 1 });
+    const scale = (w / base.width) * Math.min(window.devicePixelRatio || 1, 2);
+    const vp = page.getViewport({ scale });
+    canvas.width = Math.round(vp.width); canvas.height = Math.round(vp.height);
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport: vp, background: transparent ? 'rgba(0,0,0,0)' : 'rgb(255,255,255)', annotationMode: pdfjsLib.AnnotationMode.ENABLE_FORMS }).promise;
+  }
+
+  function outName(name) { return name.replace(/\.pdf$/i, '') + '_SIN_CUADRO.pdf'; }
+
+  async function processFile(name, bytes, isDemo) {
+    const card = document.createElement('article');
+    card.className = 'file';
+    card.innerHTML = '<div class="file-head"><div class="file-name"></div><div class="chips"></div></div><p class="msg">Procesando…</p>';
+    card.querySelector('.file-name').textContent = name;
+    if (isDemo) {
+      const tag = document.createElement('span'); tag.className = 'chip demo'; tag.textContent = 'Ejemplo';
+      card.querySelector('.file-name').appendChild(tag);
+    }
+    results.prepend(card);
+    const msg = card.querySelector('.msg');
+    try {
+      const res = await LimpiarCuadro.limpiar(PDFLib, bytes.slice(0), { quitarTextosFijos: optRot.checked });
+      const chips = card.querySelector('.chips');
+      const addChip = (t, cls) => { const c = document.createElement('span'); c.className = 'chip' + (cls ? ' ' + cls : ''); c.textContent = t; chips.appendChild(c); };
+      const p0 = res.paginas[0];
+      const wmm = toMm(p0.width), hmm = toMm(p0.height);
+      const fits = Math.abs(wmm - SHEET_W) < 2 && Math.abs(hmm - SHEET_H) < 2;
+      addChip(fmtCm(wmm) + ' × ' + fmtCm(hmm) + ' cm', fits ? 'ok' : 'warn');
+      addChip(res.paginas.length + (res.paginas.length === 1 ? ' página' : ' páginas'));
+      addChip(res.stats.imagenes ? 'Cuadro quitado' : 'No tenía imagen de fondo', res.stats.imagenes ? 'ok' : 'warn');
+
+      msg.remove();
+      if (!fits) {
+        const w = document.createElement('p'); w.className = 'msg err';
+        w.textContent = 'Este PDF no mide 29 × 26 cm. Revisá que sea la matrícula correcta antes de imprimir sobre la hoja del Colegio.';
+        card.appendChild(w);
+      }
+
+      const actions = document.createElement('div'); actions.className = 'actions';
+      const btn = document.createElement('button'); btn.className = 'btn'; btn.type = 'button';
+      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 2v8m-3.5-3.5L8 10l3.5-3.5M3 13h10" stroke-linecap="round" stroke-linejoin="round"/></svg>Descargar PDF sin cuadro';
+      const status = document.createElement('span'); status.className = 'saved';
+      const outFile = outName(name);
+      btn.addEventListener('click', () => saveFile(outFile, res.bytes, status));
+      const lbl = document.createElement('label'); lbl.className = 'opt';
+      const idUnder = 'under-' + Math.random().toString(36).slice(2, 8);
+      lbl.htmlFor = idUnder;
+      lbl.innerHTML = '<input type="checkbox" id="' + idUnder + '" checked><span>Ver el cuadro original debajo (solo en pantalla)</span>';
+      actions.append(btn, lbl, status);
+      card.appendChild(actions);
+
+      if (window.pdfjsLib) {
+        const pages = document.createElement('div'); pages.className = 'pages';
+        card.appendChild(pages);
+        const [pdfOut, pdfIn] = await Promise.all([
+          pdfjsLib.getDocument({ data: res.bytes.slice(0) }).promise,
+          pdfjsLib.getDocument({ data: bytes.slice(0) }).promise,
+        ]);
+        const unders = [];
+        for (let n = 1; n <= pdfOut.numPages; n++) {
+          const box = document.createElement('div'); box.className = 'page';
+          const label = document.createElement('div'); label.className = 'page-label';
+          label.textContent = n === 1 ? 'Frente · pág. 1' : n === 2 ? 'Dorso · pág. 2' : 'Pág. ' + n;
+          const sheet = document.createElement('div'); sheet.className = 'sheet';
+          const cOut = document.createElement('canvas'); cOut.setAttribute('aria-label', 'Vista previa de la página ' + n + ' sin cuadro');
+          const cIn = document.createElement('canvas'); cIn.className = 'under';
+          sheet.append(cOut, cIn);
+          box.append(label, sheet);
+          pages.appendChild(box);
+          unders.push(cIn);
+          await renderPage(pdfOut, n, cOut, true);
+          if (n <= pdfIn.numPages) await renderPage(pdfIn, n, cIn, false);
+        }
+        lbl.querySelector('input').addEventListener('change', (e) => unders.forEach((c) => { c.hidden = !e.target.checked; }));
+      }
+    } catch (e) {
+      console.error(e);
+      msg.className = 'msg err';
+      msg.textContent = 'No se pudo leer este archivo. Fijate que sea un PDF y que no tenga contraseña.';
+    }
+  }
+
+  function handleFiles(list) {
+    const files = Array.from(list || []).filter((f) => /\.pdf$/i.test(f.name) || f.type === 'application/pdf');
+    if (!files.length) return;
+    const demo = results.querySelector('.file[data-demo]');
+    if (demo) demo.remove();
+    files.reverse().forEach((f) => f.arrayBuffer().then((buf) => processFile(f.name, new Uint8Array(buf), false)));
+  }
+
+  drop.addEventListener('click', () => input.click());
+  drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+  input.addEventListener('change', () => { handleFiles(input.files); input.value = ''; });
+  ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop', (e) => { e.preventDefault(); if (!drop.contains(e.target)) handleFiles(e.dataTransfer.files); });
+
+  // Ejemplo inventado: una hoja PHB con el cuadro como imagen de fondo, igual que la arma el sistema.
+  async function buildDemo() {
+    const W = 822.12, H = 737.16, k = 2;
+    const cv = document.createElement('canvas'); cv.width = W * k; cv.height = H * k;
+    const g = cv.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, cv.width, cv.height);
+    g.scale(k, k); g.strokeStyle = '#444'; g.lineWidth = 0.8; g.fillStyle = '#333';
+    const L = (x1, y1, x2, y2) => { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); };
+    L(0, 88, W, 88); L(0, 380, W, 380); L(0, 650, W, 650); L(0, 672, W, 672);
+    [274, 548].forEach((x) => L(x, 88, x, 650)); [238, 480].forEach((x) => L(x, 8, x, 88));
+    L(40, 8, 40, 88); [205, 410, 615].forEach((x) => L(x, 672, x, H));
+    g.font = '8px Helvetica, Arial'; g.fillText('PARTIDO (y código)', 244, 22); g.fillText('NOMENCLATURA CATASTRAL', 486, 22);
+    g.fillText('Ministerio de Economía - Dirección Provincial del Registro de la Propiedad', 44, 664);
+    g.font = 'bold 34px Georgia, serif'; g.fillText('PHB', 730, 46);
+    const png = await new Promise((r) => cv.toBlob((b) => b.arrayBuffer().then(r), 'image/png'));
+    const doc = await PDFLib.PDFDocument.create();
+    const img = await doc.embedPng(png);
+    const font = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+    const bold = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    const p = doc.addPage([W, H]);
+    p.drawImage(img, { x: 0, y: 0, width: W, height: H });
+    const T = (t, x, yTop, f, s) => p.drawText(t, { x, y: H - yTop, size: s || 9, font: f || font });
+    T('(000)-EJEMPLO', 250, 64, bold, 12); T('00-A-PLA.0', 490, 64, bold, 12);
+    [['UF.1  SUP. 00,00 M2', 16, 104], ['UF.2', 282, 104], ['UF.3', 556, 104], ['UF.4', 16, 396], ['UF.5', 282, 396], ['UF.6', 556, 396]]
+      .forEach(([t, x, y]) => T(t, x, y));
+    T('DATOS DE EJEMPLO, NO ES UNA MATRÍCULA REAL', 16, 120);
+    return new Uint8Array(await doc.save());
+  }
+
+  if (window.PDFLib && window.LimpiarCuadro) {
+    buildDemo().then((b) => processFile('Ejemplo_PHB.pdf', b, true)).then(() => {
+      const first = results.querySelector('.file'); if (first) first.dataset.demo = '1';
+    }).catch((e) => console.error(e));
+  } else {
+    results.innerHTML = '<p class="msg err">No cargaron las herramientas para leer PDF. Revisá la conexión a internet y recargá la página.</p>';
+  }
+})();
+</script>
