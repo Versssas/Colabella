@@ -157,6 +157,12 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 .msg { font-size: 14px; margin: 0; }
 .msg.err { color: var(--warn); }
 .saved { font-size: 13px; color: var(--ok); }
+.nudge { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px 14px; margin: 0; display: grid; gap: 10px; background: var(--surface); }
+.nudge legend { font-weight: 600; font-size: 14px; padding: 0 6px; }
+.nudge .note { font-size: 13px; color: var(--ink-2); margin: 0; }
+.nudge-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; }
+.nudge-row input { width: 96px; font: 500 15px/1.2 var(--mono); padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--ink); text-align: right; }
+.nudge-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .privacy { font-size: 13px; color: var(--ink-2); display: flex; gap: 8px; align-items: flex-start; margin: 0; }
 .privacy svg { flex: none; width: 16px; height: 16px; margin-top: 2px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -183,6 +189,19 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
         <input type="checkbox" id="optRotulos">
         <span><b>Quitar los textos fijos de la plantilla</b>, como “ANTECEDENTE DOMINIAL:”. Dejalo sin marcar: esos textos no vienen impresos en la hoja del Colegio y tienen que salir en la impresión.</span>
       </label>
+      <fieldset class="nudge">
+        <legend>Ajuste fino de posición</legend>
+        <p class="note">Si en la prueba el texto salió corrido, movelo acá. Se aplica a todos los archivos y la vista previa lo muestra sobre el cuadro original.</p>
+        <div class="nudge-row">
+          <label for="nudgeDown">Mover hacia abajo <span class="mono">(mm)</span></label>
+          <input type="number" id="nudgeDown" step="0.5" min="-20" max="20" value="0" inputmode="decimal">
+        </div>
+        <div class="nudge-row">
+          <label for="nudgeRight">Mover a la derecha <span class="mono">(mm)</span></label>
+          <input type="number" id="nudgeRight" step="0.5" min="-20" max="20" value="0" inputmode="decimal">
+        </div>
+        <p class="note">Números negativos mueven para arriba o para la izquierda. Ejemplo: si salió 4 mm arriba, poné <b>4</b> en “hacia abajo”.</p>
+      </fieldset>
       <p class="privacy">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
         Los archivos se procesan en esta computadora. No se suben a ningún lado.
@@ -192,22 +211,23 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
     <aside class="howto" aria-labelledby="howto-t">
       <h2 id="howto-t">Cómo imprimir</h2>
       <ol>
-        <li>Si la impresora solo ofrece A4, oficio o A3, creá en Windows un tamaño de papel de <span class="mono">290 × 260 mm</span> (ver abajo).</li>
+        <li>Si la impresora solo ofrece A4, oficio o A3, creá un tamaño de papel de <span class="mono">290 × 260 mm</span> (ver abajo).</li>
         <li>Elegí ese tamaño y la bandeja manual.</li>
         <li>Escala <b>100 %</b> o “Tamaño real”. Nunca “Ajustar a página”: eso achica o agranda todo.</li>
         <li>Doble faz: la página 1 va al frente y la 2 al dorso.</li>
-        <li>Primero, una prueba en papel común a contraluz sobre la hoja del Colegio.</li>
+        <li>Primero, una prueba en papel común a contraluz sobre la hoja del Colegio. Si sale corrido, usá el <b>ajuste fino de posición</b>.</li>
       </ol>
       <details class="steps">
-        <summary>Crear el tamaño 29 × 26 cm en Windows</summary>
+        <summary>Toshiba e-STUDIO: crear el tamaño 29 × 26</summary>
         <ol>
-          <li>Abrí <b>Inicio</b>, escribí <b>printui /s /t0</b> y apretá Enter. Se abre “Propiedades del servidor de impresión”.</li>
-          <li>Andá a la pestaña <b>Formularios</b> y marcá <b>Crear un nuevo formulario</b>.</li>
-          <li>Nombre: <b>Matricula 29x26</b>. Unidades: <b>Métrico</b>. Ancho <span class="mono">29,00 cm</span>, Alto <span class="mono">26,00 cm</span>. Márgenes en <span class="mono">0</span>.</li>
-          <li>Apretá <b>Guardar formulario</b> y después <b>Cerrar</b>.</li>
-          <li>Al imprimir, en <b>Propiedades</b> o <b>Preferencias</b> de la impresora, elegí el papel <b>Matricula 29x26</b>, la bandeja manual y la orientación <b>Horizontal</b>.</li>
+          <li>Abrí <b>cmd</b> con clic derecho → <b>Ejecutar como administrador</b>.</li>
+          <li>Pegá <span class="mono">rundll32 printui.dll,PrintUIEntry /p /n "TOSHIBA Universal Printer 2"</span> y apretá Enter.</li>
+          <li>En <b>Configuración de dispositivo</b> elegí el modelo de la impresora (por ejemplo <b>e-STUDIO4528A</b>) y aplicá.</li>
+          <li>En <b>Preferencias → Otros → Tamaño papel personaliz. → Agregar</b>: nombre <b>Matricula</b>, ancho <span class="mono">260 mm</span>, largo <span class="mono">290 mm</span>.</li>
+          <li>Al imprimir: Tamaño del original <b>Matricula</b>, Mismo tamaño que original, <b>Bandeja bypass</b>, orientación <b>Horizontal</b> y escala al 100 %.</li>
+          <li>Doble faz a mano: página 1, volvés a poner la hoja dada vuelta, página 2.</li>
         </ol>
-        <p class="note">Algunas impresoras no aceptan un ancho mayor que el alto. En ese caso creá el formulario como 26 × 29 cm y elegí orientación Horizontal.</p>
+        <p class="note">En otras impresoras el tamaño personalizado suele estar en Preferencias de impresión del driver o en Windows (printui /s /t0 → Formularios).</p>
       </details>
       <details class="steps" open>
         <summary>Transfer en A4 con la plancha de calor</summary>
@@ -345,6 +365,9 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
   function limpiar(PDFLib, bytes, opts) {
     const { PDFDocument, PDFName, PDFDict, PDFArray, PDFRawStream, PDFStream, decodePDFRawStream } = PDFLib;
     const removeText = !!(opts && opts.quitarTextosFijos);
+    // Ajuste fino: corre todo el contenido (mm) para compensar el registro de la impresora.
+    const mmPt = 72 / 25.4;
+    const dx = ((opts && +opts.derechaMm) || 0) * mmPt, dy = -((opts && +opts.abajoMm) || 0) * mmPt;
     return PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false }).then((doc) => {
       const ctx = doc.context;
       const stats = { imagenes: 0, formularios: 0 };
@@ -462,6 +485,7 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
           }
           if (keep.length) node.set(N('Annots'), ctx.obj(keep)); else node.delete(N('Annots'));
         }
+        if (dx || dy) pageOps = 'q\n1 0 0 1 ' + fmt(dx) + ' ' + fmt(dy) + ' cm\n' + pageOps + 'Q\n';
         node.set(N('Contents'), ctx.register(ctx.stream(pageOps)));
       }
       doc.catalog.delete(N('AcroForm'));
@@ -484,6 +508,9 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 (function () {
   const $ = (s) => document.querySelector(s);
   const drop = $('#drop'), input = $('#file'), results = $('#results'), optRot = $('#optRotulos');
+  const nudgeDown = $('#nudgeDown'), nudgeRight = $('#nudgeRight');
+  const numVal = (el) => { const v = parseFloat(String(el.value).replace(',', '.')); return isFinite(v) ? Math.max(-20, Math.min(20, v)) : 0; };
+  const currentOpts = () => ({ quitarTextosFijos: optRot.checked, abajoMm: numVal(nudgeDown), derechaMm: numVal(nudgeRight) });
   const SHEET_W = 290, SHEET_H = 260; // mm
   const toMm = (pt) => pt / 72 * 25.4;
   const fmtCm = (mm) => (mm / 10).toFixed(1).replace('.', ',');
@@ -786,7 +813,7 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
     results.prepend(card);
     const msg = card.querySelector('.msg');
     try {
-      const res = await LimpiarCuadro.limpiar(PDFLib, bytes.slice(0), { quitarTextosFijos: optRot.checked });
+      const res = await LimpiarCuadro.limpiar(PDFLib, bytes.slice(0), currentOpts());
       const chips = card.querySelector('.chips');
       const addChip = (t, cls) => { const c = document.createElement('span'); c.className = 'chip' + (cls ? ' ' + cls : ''); c.textContent = t; chips.appendChild(c); };
       const p0 = res.paginas[0];
@@ -883,8 +910,32 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
     if (!files.length) return;
     const demo = results.querySelector('.file[data-demo]');
     if (demo) demo.remove();
-    files.reverse().forEach((f) => f.arrayBuffer().then((buf) => processFile(f.name, new Uint8Array(buf), false)));
+    files.reverse().forEach((f) => f.arrayBuffer().then((buf) => {
+      const bytes = new Uint8Array(buf);
+      loaded.push({ name: f.name, bytes });
+      processFile(f.name, bytes, false);
+    }));
   }
+
+  // Al cambiar una opción se vuelven a procesar los archivos ya cargados.
+  const loaded = [];
+  let reTimer = 0;
+  function reprocessAll() {
+    clearTimeout(reTimer);
+    reTimer = setTimeout(() => {
+      if (!loaded.length) return;
+      results.innerHTML = '';
+      loaded.slice().reverse().forEach((f) => processFile(f.name, f.bytes, false));
+    }, 350);
+  }
+  [nudgeDown, nudgeRight].forEach((el) => {
+    try { const v = localStorage.getItem('limpiador-' + el.id); if (v !== null && v !== '') el.value = v; } catch (e) {}
+    el.addEventListener('input', () => {
+      try { localStorage.setItem('limpiador-' + el.id, el.value); } catch (e) {}
+      reprocessAll();
+    });
+  });
+  optRot.addEventListener('change', reprocessAll);
 
   $('#btnPlantilla').addEventListener('click', async (e) => {
     const b = e.currentTarget, st = $('#plantillaStatus');
