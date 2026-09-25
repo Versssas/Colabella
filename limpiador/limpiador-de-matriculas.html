@@ -180,8 +180,8 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
         <input type="file" id="file" accept="application/pdf,.pdf" multiple hidden>
       </div>
       <label class="opt" for="optRotulos">
-        <input type="checkbox" id="optRotulos" checked>
-        <span><b>Quitar también los rótulos fijos del formulario</b>, como “ANTECEDENTE DOMINIAL:”, que ya vienen impresos en la hoja. Desmarcalo si en la vista previa desaparece algún dato.</span>
+        <input type="checkbox" id="optRotulos">
+        <span><b>Quitar los textos fijos de la plantilla</b>, como “ANTECEDENTE DOMINIAL:”. Dejalo sin marcar: esos textos no vienen impresos en la hoja del Colegio y tienen que salir en la impresión.</span>
       </label>
       <p class="privacy">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>
@@ -344,7 +344,7 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
 
   function limpiar(PDFLib, bytes, opts) {
     const { PDFDocument, PDFName, PDFDict, PDFArray, PDFRawStream, PDFStream, decodePDFRawStream } = PDFLib;
-    const removeText = !opts || opts.quitarTextosFijos !== false;
+    const removeText = !!(opts && opts.quitarTextosFijos);
     return PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false }).then((doc) => {
       const ctx = doc.context;
       const stats = { imagenes: 0, formularios: 0 };
