@@ -210,6 +210,16 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
         <p class="note">Algunas impresoras no aceptan un ancho mayor que el alto. En ese caso creá el formulario como 26 × 29 cm y elegí orientación Horizontal.</p>
       </details>
       <details class="steps" open>
+        <summary>Transfer en A4 con la plancha de calor</summary>
+        <ol>
+          <li>Con el botón <b>Transfer en A4 (espejo)</b> bajá el PDF. Cada cara viene en dos tiras, arriba y abajo, cortadas por una franja sin texto. Si una tira no tiene datos, no se incluye.</li>
+          <li>Imprimilo en papel transfer A4 al <b>100 %</b> (“Tamaño real”). Sale en espejo: está bien así.</li>
+          <li>Cortá cada tira por las líneas finas de los bordes. El lado del medio se corta en la franja en blanco.</li>
+          <li>Apoyá la tira de arriba contra el borde de arriba y los costados de la hoja del Colegio, y la de abajo contra el borde de abajo. Pasá la plancha.</li>
+        </ol>
+        <p class="note">Probalo primero sobre una fotocopia de la hoja, para ver temperatura, tiempo y que no se manche.</p>
+      </details>
+      <details class="steps">
         <summary>La impresora no ofrece 29 × 26: hoja portadora en A3</summary>
         <ol>
           <li>Descargá la <b>plantilla</b> e imprimila en una A3 común al <b>100 %</b>. Controlá que la regla mida 10 cm.</li>
@@ -684,6 +694,84 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
     return doc.save();
   }
 
+  // Papel transfer A4: cada cara se parte en dos tiras (arriba y abajo) que entran en una A4 apaisada,
+  // a tamaño real y en espejo. El corte se hace en la franja sin texto más ancha.
+  const A4W = 297 / 25.4 * 72, A4H = 210 / 25.4 * 72;
+  async function findSplit(cleanBytes, pageIndex, pageH) {
+    const MAXPIECE = 185 * MM; // alto máximo de cada tira, deja lugar para marcas y leyenda
+    const lo = pageH - MAXPIECE, hi = MAXPIECE;
+    const busy = [];
+    if (window.pdfjsLib) {
+      const pdf = await pdfjsLib.getDocument({ data: cleanBytes.slice(0) }).promise;
+      const page = await pdf.getPage(pageIndex + 1);
+      const tc = await page.getTextContent();
+      tc.items.forEach((it) => {
+        if (!it.str || !it.str.trim()) return;
+        const y = it.transform[5], hgt = Math.max(it.height || Math.abs(it.transform[3]) || 10, 4);
+        busy.push([y - hgt * 0.3, y + hgt * 1.05]);
+      });
+    }
+    let best = (lo + hi) / 2, bestD = -1;
+    for (let y = Math.ceil(lo); y <= Math.floor(hi); y += 1) {
+      let d = Infinity;
+      for (const [a, b] of busy) {
+        if (y >= a && y <= b) { d = 0; break; }
+        d = Math.min(d, y < a ? a - y : y - b);
+      }
+      const score = Math.min(d, 60) - Math.abs(y - pageH / 2) * 0.001; // a igual espacio, lo más cerca del medio
+      if (score > bestD) { bestD = score; best = y; }
+    }
+    return { y: best, libre: bestD > 2, busy };
+  }
+
+  async function makeTransferA4(cleanBytes) {
+    const P = PDFLib;
+    const src = await P.PDFDocument.load(cleanBytes.slice(0));
+    const doc = await P.PDFDocument.create();
+    const font = await doc.embedFont(P.StandardFonts.Helvetica);
+    const bold = await doc.embedFont(P.StandardFonts.HelveticaBold);
+    const ink = P.rgb(0, 0, 0), gray = P.rgb(0.35, 0.35, 0.35);
+    const pages = src.getPages();
+    const embedded = await doc.embedPages(pages);
+    let avisos = 0;
+    for (let i = 0; i < embedded.length; i++) {
+      const ep = embedded[i], w = ep.width, H = ep.height;
+      const split = await findSplit(cleanBytes, i, H);
+      if (!split.libre) avisos++;
+      const lado = i === 0 ? 'FRENTE' : i === 1 ? 'DORSO' : 'PÁGINA ' + (i + 1);
+      const conTexto = (a, b) => split.busy.length === 0 || split.busy.some(([u, v]) => v > a && u < b);
+      const piezas = [
+        { s0: split.y, s1: H, nombre: 'parte de ARRIBA', arriba: true },
+        { s0: 0, s1: split.y, nombre: 'parte de ABAJO', arriba: false },
+      ].filter((pz) => conTexto(pz.s0, pz.s1)); // una tira sin datos no hace falta imprimirla
+      piezas.forEach((pz, k) => {
+        const p = doc.addPage([A4W, A4H]);
+        const hs = pz.s1 - pz.s0;
+        const x0 = 5 * MM; // antes del espejo; después queda a 5 mm del borde derecho
+        const py0 = pz.arriba ? A4H - 15 * MM - hs : 15 * MM;
+        p.pushOperators(P.pushGraphicsState(), P.concatTransformationMatrix(-1, 0, 0, 1, A4W, 0),
+          P.rectangle(x0, py0, w, hs), P.clip(), P.endPath());
+        p.drawPage(ep, { x: x0, y: py0 - pz.s0, width: w, height: H });
+        p.pushOperators(P.popGraphicsState());
+        // marcas de corte (ya en coordenadas finales, espejadas)
+        const leftX = A4W - x0, rightX = A4W - x0 - w; // borde izquierdo y derecho de la hoja del Colegio
+        const outerY = pz.arriba ? py0 + hs : py0, dir = pz.arriba ? 1 : -1;
+        const L = (x1, y1, x2, y2, t) => p.drawLine({ start: { x: x1, y: y1 }, end: { x: x2, y: y2 }, thickness: t || 0.4, color: ink });
+        [leftX, rightX].forEach((ex) => L(ex, outerY + dir * 1 * MM, ex, outerY + dir * 11 * MM));
+        L(leftX, outerY, leftX - 12 * MM, outerY, 0.3); // tramo sobre el borde exterior
+        L(rightX, outerY, rightX + 12 * MM, outerY, 0.3);
+        L(leftX, outerY, leftX, outerY - dir * 12 * MM, 0.3); // tramo sobre el borde lateral
+        L(rightX, outerY, rightX, outerY - dir * 12 * MM, 0.3);
+        // leyenda (sin espejar, queda afuera de la tira y se recorta)
+        const ly = pz.arriba ? py0 - 7 * MM : py0 + hs + 4 * MM;
+        const t = (s, tx, ty, f, size) => p.drawText(s, { x: tx, y: ty, size: size || 8, font: f || font, color: gray });
+        t(lado + ' - ' + pz.nombre + ' (' + (k + 1) + ' de ' + piezas.length + ')  -  impreso en ESPEJO', 12 * MM, ly, bold, 9);
+        t('Imprimir en A4 al 100 % ("Tamaño real"). Cortar por las lineas de los bordes. El borde ' + (pz.arriba ? 'de arriba' : 'de abajo') + ' de esta tira va contra el borde ' + (pz.arriba ? 'de arriba' : 'de abajo') + ' de la hoja.', 12 * MM, ly - 4 * MM, font, 7);
+      });
+    }
+    return { bytes: await doc.save(), avisos };
+  }
+
   function outName(name) { return name.replace(/\.pdf$/i, '') + '_SIN_CUADRO.pdf'; }
 
   async function processFile(name, bytes, isDemo) {
@@ -737,7 +825,20 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
       const idUnder = 'under-' + Math.random().toString(36).slice(2, 8);
       lbl.htmlFor = idUnder;
       lbl.innerHTML = '<input type="checkbox" id="' + idUnder + '" checked><span>Ver el cuadro original debajo (solo en pantalla)</span>';
-      actions.append(btn, btnA3, lbl, status);
+      const btnTr = document.createElement('button'); btnTr.className = 'btn ghost'; btnTr.type = 'button';
+      btnTr.textContent = 'Transfer en A4 (espejo)';
+      btnTr.title = 'Cada cara partida en dos tiras que entran en A4, a tamaño real y en espejo, para papel transfer';
+      btnTr.addEventListener('click', async () => {
+        btnTr.disabled = true;
+        try {
+          const tr = await makeTransferA4(res.bytes.slice(0));
+          await saveFile(name.replace(/\.pdf$/i, '') + '_TRANSFER_A4_ESPEJO.pdf', tr.bytes, status);
+          if (tr.avisos) status.textContent += ' · Atención: en alguna cara el corte pasa cerca de un texto, revisalo antes de transferir.';
+        } catch (e) {
+          console.error(e); status.textContent = 'No se pudo armar la versión para transfer.';
+        } finally { btnTr.disabled = false; }
+      });
+      actions.append(btn, btnTr, btnA3, lbl, status);
       card.appendChild(actions);
 
       if (window.pdfjsLib) {
